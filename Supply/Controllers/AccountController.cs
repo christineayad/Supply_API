@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Supply.Models;
 using Supply.Models.DTO;
@@ -15,16 +16,21 @@ namespace Supply.Controllers
     public class AccountController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
-        public AccountController(UserManager<ApplicationUser> userManager,IConfiguration configuration)
+        public AccountController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
         {
 
             _userManager = userManager;
+            _roleManager = roleManager;
             _configuration = configuration;
         }
         [HttpPost("[Action]")]
         public async Task<IActionResult> Register(Registerdto user)
         {
+
+
+            
             if (ModelState.IsValid)
             {
                 ApplicationUser appuser = new()
@@ -102,5 +108,73 @@ namespace Supply.Controllers
             }
             return BadRequest(ModelState);
         }
+
+        [HttpGet("[Action]")]
+        public IActionResult GetAllRoles()
+        {
+            var roles = _roleManager.Roles.ToList();
+            return Ok(roles);
+        }
+
+        [HttpPost("[Action]")]
+        public async Task<IActionResult> CreateRole(string roleName)
+        {
+            var roleExist = await _roleManager.RoleExistsAsync(roleName);
+            if (!roleExist)
+            {
+                //create the roles and seed them to the database
+                var roleResult = await _roleManager.CreateAsync(new IdentityRole(roleName));
+
+                if (roleResult.Succeeded)
+                {
+                   
+                    return Ok(new { result = $"Role {roleName} added successfully" });
+                }
+                else
+                {
+                  
+                    return BadRequest(new { error = $"Issue adding the new {roleName} role" });
+                }
+            }
+
+            return BadRequest(new { error = "Role already exist" });
+        }
+
+        // Get all users
+        [HttpGet("[Action]")]
+        //[Route("GetAllUsers")]
+        public async Task<IActionResult> GetAllUsers()
+        {
+            var users = await _userManager.Users.ToListAsync();
+            return Ok(users);
+        }
+
+        // Add User to role
+        [HttpPost("[Action]")]
+        //[Route("AddUserToRole")]
+        public async Task<IActionResult> AddUserToRole(string email, string roleName)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user != null)
+            {
+                var result = await _userManager.AddToRoleAsync(user, roleName);
+
+                if (result.Succeeded)
+                {
+                  
+                    return Ok(new { result = $"User {user.Email} added to the {roleName} role" });
+                }
+                else
+                {
+                   
+                    return BadRequest(new { error = $"Error: Unable to add user {user.Email} to the {roleName} role" });
+                }
+            }
+
+            // User doesn't exist
+            return BadRequest(new { error = "Unable to find user" });
+        }
+
     }
 }
