@@ -35,10 +35,12 @@ namespace Supply.Controllers
             {
                 ApplicationUser appuser = new()
                 {
-                    Name= user.Username,
-                    UserName=user.Username,
+                    FullName = user.Username,
+                  //  UserName = user.Username,
                     Email = user.Email,
                     Mobile = user.Mobile,
+                    //Active = false
+                   
 
                 };
                 IdentityResult result = await _userManager.CreateAsync(appuser, user.Password);
@@ -64,10 +66,10 @@ namespace Supply.Controllers
             if (ModelState.IsValid)
             {
                 ApplicationUser? user = await _userManager.FindByNameAsync(login.Username);
-                if(user!=null)
+                if(user!=null && user.Active == true)
                 {
                     //Payload
-                    if( await _userManager.CheckPasswordAsync(user,login.Password))
+                    if( await _userManager.CheckPasswordAsync(user,login.Password) )
                     {
                         var claims = new List<Claim>();
                       //  claims.Add(new Claim("tokenNo", "75"));
@@ -109,13 +111,7 @@ namespace Supply.Controllers
             return BadRequest(ModelState);
         }
 
-        [HttpGet("[Action]")]
-        public IActionResult GetAllRoles()
-        {
-            var roles = _roleManager.Roles.ToList();
-            return Ok(roles);
-        }
-
+      
         [HttpPost("[Action]")]
         public async Task<IActionResult> CreateRole(string roleName)
         {
@@ -139,6 +135,14 @@ namespace Supply.Controllers
 
             return BadRequest(new { error = "Role already exist" });
         }
+        //get all roles
+        [HttpGet("[Action]")]
+        public IActionResult GetAllRoles()
+        {
+            var roles = _roleManager.Roles.ToList();
+            return Ok(roles);
+        }
+
 
         // Get all users
         [HttpGet("[Action]")]
@@ -148,27 +152,39 @@ namespace Supply.Controllers
             var users = await _userManager.Users.ToListAsync();
             return Ok(users);
         }
+        [HttpGet("[Action]")]
+        //[Route("GetAllUsers")]
+        public async Task<IActionResult> GetById(string id)
+        {
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Id == id);
+            if (user == null)
+            {
+                return NotFound();
+            }
+            return Ok(user);
+        }
 
         // Add User to role
         [HttpPost("[Action]")]
         //[Route("AddUserToRole")]
-        public async Task<IActionResult> AddUserToRole(string email, string roleName)
+        public async Task<IActionResult> AddUserToRole(string userid, string roleid)
         {
-            var user = await _userManager.FindByEmailAsync(email);
+            var user = await _userManager.FindByIdAsync(userid);
+            var role = await _roleManager.FindByIdAsync(roleid);
 
             if (user != null)
             {
-                var result = await _userManager.AddToRoleAsync(user, roleName);
+                var result = await _userManager.AddToRoleAsync(user, role.Name);
 
                 if (result.Succeeded)
                 {
                   
-                    return Ok(new { result = $"User {user.Email} added to the {roleName} role" });
+                    return Ok(new { result = $"User {user.FullName} added to the {role.Name} role" });
                 }
                 else
                 {
                    
-                    return BadRequest(new { error = $"Error: Unable to add user {user.Email} to the {roleName} role" });
+                    return BadRequest(new { error = $"Error: Unable to add user {user.FullName} to the {role.Name} role" });
                 }
             }
 
@@ -176,5 +192,27 @@ namespace Supply.Controllers
             return BadRequest(new { error = "Unable to find user" });
         }
 
+        [HttpPost("[Action]")]
+        public async Task<IActionResult> SetActiveStatus(SetStatusActive model)
+        {
+            var user = await _userManager.FindByIdAsync(model.UserId);
+
+            if (user == null)
+            {
+                return BadRequest(new { error = "User not found" });
+            }
+
+            user.Active = model.IsActive;
+            var result = await _userManager.UpdateAsync(user);
+
+            if (result.Succeeded)
+            {
+                return Ok(new { result = $"User {user.UserName} active status set to {model.IsActive}" });
+            }
+
+            return BadRequest(new { error = "Error updating user active status", details = result.Errors });
+        }
     }
+
 }
+
