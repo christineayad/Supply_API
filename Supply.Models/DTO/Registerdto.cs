@@ -9,6 +9,8 @@ namespace Supply.Models.DTO
 {
     public class Registerdto
     {
+        [Required(ErrorMessage = "FullName is required")]
+        public string FullName { get; set; }
         [Required(ErrorMessage = "Username is required")]
         public string Username { get; set; }
 

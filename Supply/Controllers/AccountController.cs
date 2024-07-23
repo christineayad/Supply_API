@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Azure;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.IdentityModel.Tokens;
 using Supply.Models;
 using Supply.Models.DTO;
@@ -19,9 +21,9 @@ namespace Supply.Controllers
     public class AccountController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly RoleManager<ApplicationRole> _roleManager;
         private readonly IConfiguration _configuration;
-        public AccountController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        public AccountController(UserManager<ApplicationUser> userManager, RoleManager<ApplicationRole> roleManager, IConfiguration configuration)
         {
 
             _userManager = userManager;
@@ -32,14 +34,16 @@ namespace Supply.Controllers
         public async Task<IActionResult> Register(Registerdto user)
         {
 
+            var userExist = await _userManager.FindByNameAsync(user.Username);
+            if (userExist != null)
+                return BadRequest(new { error = "User already exists" });
 
-            
             if (ModelState.IsValid)
             {
                 ApplicationUser appuser = new()
                 {
-                    FullName = user.Username,
-                  //  UserName = user.Username,
+                    FullName = user.FullName,
+                   UserName = user.Username,
                     Email = user.Email,
                     Mobile = user.Mobile,
                     //Active = false
@@ -114,35 +118,40 @@ namespace Supply.Controllers
             return BadRequest(ModelState);
         }
 
-      
+
         [HttpPost("[Action]")]
-        public async Task<IActionResult> CreateRole(string roleName)
+        public async Task<IActionResult> CreateRole(Role role)
         {
-            var roleExist = await _roleManager.RoleExistsAsync(roleName);
+            var roleExist = await _roleManager.RoleExistsAsync(role.NameEnglishRole);
             if (!roleExist)
             {
                 //create the roles and seed them to the database
-                var roleResult = await _roleManager.CreateAsync(new IdentityRole(roleName));
+                var roleDB = new ApplicationRole
+                {
+                    Name = role.NameEnglishRole,
+                    NameArablic = role.NameArabicRole
+                };
+                var roleResult = await _roleManager.CreateAsync(roleDB);
 
                 if (roleResult.Succeeded)
                 {
-                   
-                    return Ok(new { result = $"Role {roleName} added successfully" });
+
+                    return Ok(new { result = $"Role {role.NameEnglishRole} added successfully" });
                 }
                 else
                 {
-                  
-                    return BadRequest(new { error = $"Issue adding the new {roleName} role" });
+
+                    return BadRequest(new { error = $"Issue adding the new {role.NameEnglishRole} role" });
                 }
             }
 
-            return BadRequest(new { error = "Role already exist" });
+            return BadRequest(new { error = "Role already exists" });
         }
         //get all roles
         [HttpGet("[Action]")]
         public IActionResult GetAllRoles()
         {
-            var roles = _roleManager.Roles.ToList();
+            var roles = _roleManager.Roles.Select(x=>new { x.Id, x.Name, x.NameArablic }).ToList();
             return Ok(roles);
         }
 
@@ -153,32 +162,49 @@ namespace Supply.Controllers
         public async Task<IActionResult> GetAllUsers( string? search,bool? IsActive, int pageNumber = 1, int pageSize = 1)
         {
             IEnumerable<ApplicationUser> appuser;
-            appuser = await _userManager.Users.ToListAsync();
-            if (IsActive.HasValue)
-            
-            {
-             appuser = await _userManager.Users.Where(u=>u.Active==IsActive.Value).ToListAsync();
-            }
-            
-               
-            if (!string.IsNullOrEmpty(search))
-            {
-                appuser =  await _userManager.Users.Where(u => u.FullName.ToLower().Contains(search)).ToListAsync();
-            }
-            // Apply pagination
-            if(pageSize>0)
+             //appuser = await _userManager.Users.ToListAsync();
+            //  appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
+            if (pageSize > 0)
             {
 
-                if(pageSize>100)
+                if (pageSize > 100)
                 {
-                    pageSize=100;
+                    pageSize = 100;
                 }
-            appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
+                appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
+
+
+
+                if (IsActive.HasValue)
+
+                {
+                    appuser = await _userManager.Users.Where(u => u.Active == IsActive.Value).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
                 }
-            Pagination pagination = new() { PageNumber = pageNumber, PageSize = pageSize };
+
+
+                if (!string.IsNullOrEmpty(search))
+                {
+                    appuser = await _userManager.Users.Where(u => u.UserName.ToLower().Contains(search)).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+                }
+                //total items
+                int totalItems = await _userManager.Users.CountAsync();
+                // Apply pagination
+
+
+                Pagination pagination = new()
+                {
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalItems = totalItems,
+                    TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
+
+                };
+            
 
             Response.Headers.Add("X-Pagination", JsonSerializer.Serialize(pagination));
             return Ok(appuser);
+            }
+
         }
         [HttpGet("[Action]")]
         //[Route("GetAllUsers")]
