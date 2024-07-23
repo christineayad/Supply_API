@@ -5,9 +5,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Supply.Models;
 using Supply.Models.DTO;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace Supply.Controllers
 {
@@ -147,10 +150,35 @@ namespace Supply.Controllers
         // Get all users
         [HttpGet("[Action]")]
         //[Route("GetAllUsers")]
-        public async Task<IActionResult> GetAllUsers()
+        public async Task<IActionResult> GetAllUsers( string? search,bool? IsActive, int pageNumber = 1, int pageSize = 1)
         {
-            var users = await _userManager.Users.ToListAsync();
-            return Ok(users);
+            IEnumerable<ApplicationUser> appuser;
+            appuser = await _userManager.Users.ToListAsync();
+            if (IsActive.HasValue)
+            
+            {
+             appuser = await _userManager.Users.Where(u=>u.Active==IsActive.Value).ToListAsync();
+            }
+            
+               
+            if (!string.IsNullOrEmpty(search))
+            {
+                appuser =  await _userManager.Users.Where(u => u.FullName.ToLower().Contains(search)).ToListAsync();
+            }
+            // Apply pagination
+            if(pageSize>0)
+            {
+
+                if(pageSize>100)
+                {
+                    pageSize=100;
+                }
+            appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
+                }
+            Pagination pagination = new() { PageNumber = pageNumber, PageSize = pageSize };
+
+            Response.Headers.Add("X-Pagination", JsonSerializer.Serialize(pagination));
+            return Ok(appuser);
         }
         [HttpGet("[Action]")]
         //[Route("GetAllUsers")]
