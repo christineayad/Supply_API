@@ -164,8 +164,7 @@ namespace Supply.Controllers
             IEnumerable<ApplicationUser> appuser;
             //appuser = await _userManager.Users.ToListAsync();
             //  appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
-            try
-            {
+           
                 if (pageSize > 0)
                 {
 
@@ -189,24 +188,7 @@ namespace Supply.Controllers
                         appuser = await _userManager.Users.Where(u => u.UserName.ToLower().Contains(search)).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
                     }
 
-                    // Retrieve claims for each user
-                    var userWithClaimsList = new List<UserWithClaims>();
-
-                    foreach (var user in appuser)
-                    {
-                        var claims = await _userManager.GetClaimsAsync(user);
-                        var userWithClaims = new UserWithClaims
-                        {
-                            Id = user.Id,
-                            UserName = user.UserName,
-                            FullName = user.FullName,
-                            Email = user.Email,
-                            Mobile = user.Mobile,
-                            Active = user.Active,
-                            Claims = claims.ToList()
-                        };
-                        userWithClaimsList.Add(userWithClaims);
-                    }
+                   
                     //total items
                     int totalItems = await _userManager.Users.CountAsync();
                     //  pagination response
@@ -221,19 +203,13 @@ namespace Supply.Controllers
 
 
                     Response.Headers.Add("X-Pagination", JsonSerializer.Serialize(pagination));
-                    return Ok(userWithClaimsList);
+                    return Ok(appuser);
                 }
-            }
-            catch (Exception ex)
-            {
-                // Log the exception
-                // _logger.LogError(ex, "An error occurred while getting users.");
-
-                // Return a generic error response
-                return StatusCode(500, "Internal server error. Please try again later.");
-            }
-            return NotFound("Not found");
+            return BadRequest(new { error = "Unable to find user" });
         }
+           
+         
+        
         [HttpGet("[Action]")]
         //[Route("GetAllUsers")]
         public async Task<IActionResult> GetById(string id)
