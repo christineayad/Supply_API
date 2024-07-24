@@ -271,15 +271,7 @@ namespace Supply.Controllers
             return BadRequest(new { error = "Error updating user active status", details = result.Errors });
         }
 
-        [HttpGet("[Action]")]
-        public async Task<IActionResult> GetAllClaims(string name)
-        {
-            var user = await _userManager.FindByNameAsync(name);
-
-            var claims = await _userManager.GetClaimsAsync(user);
-
-            return Ok(claims);
-        }
+       
 
         [HttpPost("[Action]")]
 
@@ -307,6 +299,28 @@ namespace Supply.Controllers
 
             // User doesn't exist
             return BadRequest(new { error = "Unable to find user" });
+        }
+
+        [HttpGet("[Action]")]
+        public async Task<IActionResult> GetAllClaims(string Username)
+        {
+            ApplicationUser? user = await _userManager.FindByNameAsync(Username);
+            var claims = new List<Claim>();
+            //  claims.Add(new Claim("tokenNo", "75"));
+            claims.Add(new Claim(ClaimTypes.Name, user.UserName));
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, user.Id));
+            claims.Add(new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()));
+
+            var roles = await _userManager.GetRolesAsync(user);
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            var claimsDto = claims.Select(c => new { c.Type, c.Value }).ToList();
+
+            return Ok(claimsDto);
+            
         }
     }
 }
