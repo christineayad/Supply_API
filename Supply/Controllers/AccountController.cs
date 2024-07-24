@@ -162,49 +162,77 @@ namespace Supply.Controllers
         public async Task<IActionResult> GetAllUsers( string? search,bool? IsActive, int pageNumber = 1, int pageSize = 1)
         {
             IEnumerable<ApplicationUser> appuser;
-             //appuser = await _userManager.Users.ToListAsync();
+            //appuser = await _userManager.Users.ToListAsync();
             //  appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
-            if (pageSize > 0)
+            try
             {
-
-                if (pageSize > 100)
+                if (pageSize > 0)
                 {
-                    pageSize = 100;
+
+                    if (pageSize > 100)
+                    {
+                        pageSize = 100;
+                    }
+                    appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
+
+
+
+                    if (IsActive.HasValue)
+
+                    {
+                        appuser = await _userManager.Users.Where(u => u.Active == IsActive.Value).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+                    }
+
+
+                    if (!string.IsNullOrEmpty(search))
+                    {
+                        appuser = await _userManager.Users.Where(u => u.UserName.ToLower().Contains(search)).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+                    }
+
+                    // Retrieve claims for each user
+                    var userWithClaimsList = new List<UserWithClaims>();
+
+                    foreach (var user in appuser)
+                    {
+                        var claims = await _userManager.GetClaimsAsync(user);
+                        var userWithClaims = new UserWithClaims
+                        {
+                            Id = user.Id,
+                            UserName = user.UserName,
+                            FullName = user.FullName,
+                            Email = user.Email,
+                            Mobile = user.Mobile,
+                            Active = user.Active,
+                            Claims = claims.ToList()
+                        };
+                        userWithClaimsList.Add(userWithClaims);
+                    }
+                    //total items
+                    int totalItems = await _userManager.Users.CountAsync();
+                    //  pagination response
+                    Pagination pagination = new()
+                    {
+                        PageNumber = pageNumber,
+                        PageSize = pageSize,
+                        TotalItems = totalItems,
+                        TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
+
+                    };
+
+
+                    Response.Headers.Add("X-Pagination", JsonSerializer.Serialize(pagination));
+                    return Ok(userWithClaimsList);
                 }
-                appuser = _userManager.Users.Skip((pageNumber - 1) * pageSize).Take(pageSize);
-
-
-
-                if (IsActive.HasValue)
-
-                {
-                    appuser = await _userManager.Users.Where(u => u.Active == IsActive.Value).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
-                }
-
-
-                if (!string.IsNullOrEmpty(search))
-                {
-                    appuser = await _userManager.Users.Where(u => u.UserName.ToLower().Contains(search)).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
-                }
-                //total items
-                int totalItems = await _userManager.Users.CountAsync();
-                // Apply pagination
-
-
-                Pagination pagination = new()
-                {
-                    PageNumber = pageNumber,
-                    PageSize = pageSize,
-                    TotalItems = totalItems,
-                    TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
-
-                };
-            
-
-            Response.Headers.Add("X-Pagination", JsonSerializer.Serialize(pagination));
-            return Ok(appuser);
             }
+            catch (Exception ex)
+            {
+                // Log the exception
+                // _logger.LogError(ex, "An error occurred while getting users.");
 
+                // Return a generic error response
+                return StatusCode(500, "Internal server error. Please try again later.");
+            }
+            return NotFound("Not found");
         }
         [HttpGet("[Action]")]
         //[Route("GetAllUsers")]
@@ -266,7 +294,46 @@ namespace Supply.Controllers
 
             return BadRequest(new { error = "Error updating user active status", details = result.Errors });
         }
-    }
 
+        [HttpGet("[Action]")]
+        public async Task<IActionResult> GetAllClaims(string name)
+        {
+            var user = await _userManager.FindByNameAsync(name);
+
+            var claims = await _userManager.GetClaimsAsync(user);
+
+            return Ok(claims);
+        }
+
+        [HttpPost("[Action]")]
+
+        public async Task<IActionResult> AddClaimToUser(string username, string claimName, string value)
+        {
+            var user = await _userManager.FindByNameAsync(username);
+
+            var userClaim = new Claim(claimName, value);
+
+            if (user != null)
+            {
+                var result = await _userManager.AddClaimAsync(user, userClaim);
+
+                if (result.Succeeded)
+                {
+                   // _logger.LogInformation(1, $"the claim {claimName} add to the  User {user.Email}");
+                    return Ok(new { result = $"the claim {claimName} add to the  User {user.Email}" });
+                }
+                else
+                {
+                   // _logger.LogInformation(1, $"Error: Unable to add the claim {claimName} to the  User {user.Email}");
+                    return BadRequest(new { error = $"Error: Unable to add the claim {claimName} to the  User {user.Email}" });
+                }
+            }
+
+            // User doesn't exist
+            return BadRequest(new { error = "Unable to find user" });
+        }
+    }
 }
+
+
 
